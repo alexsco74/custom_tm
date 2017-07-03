@@ -1,0 +1,321 @@
+<?php
+DEFINE('CUSTOM_TM_PAGE', 'custom-tm');
+
+/**
+ * @file
+ * Custom taxonomy mover
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function custom_tm_menu() {
+  $items[CUSTOM_TM_PAGE] = array(
+    'page callback' => 'custom_tm_page',
+    'access callback' => array('_custom_tm_page_access'),
+    'menu_name' => 'navigation',
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+function _custom_tm_page_access() {
+  return user_access('administer site configuration');
+}
+
+function _custom_tm_vid_validate($get = 'vid') {
+  if (!empty($_GET[$get])) {
+    $vid = trim(filter_xss($_GET[$get]));
+    $voc = taxonomy_vocabulary_load($vid);
+  }
+  return !empty($voc) ? $voc->vid : FALSE;
+}
+
+function custom_tm_page() {
+
+  $get = $_GET;
+  unset($get['q']);
+  if (empty($get) && isset($_SESSION['custom_tm'])) {
+    $options = array('query' => $_SESSION['custom_tm']);
+    drupal_goto(current_path(), $options);
+  }
+
+  if (!_custom_tm_vid_validate('vid')) {
+    $vocabularies = taxonomy_get_vocabularies();
+    if (!empty($vocabularies)) {
+      $vid = key($vocabularies);
+      drupal_goto(current_path(), array('query' => array('vid' => $vid)));
+    }
+  }
+
+  if (($voc_vid = _custom_tm_vid_validate('vid')) && !_custom_tm_vid_validate('move')) {
+    $query = $_GET;
+    unset($query['q']);
+    unset($query['move_parent']);
+    $query['move'] = $voc_vid;
+    drupal_goto(current_path(), array('query' => $query));
+  }
+
+  drupal_set_title('Custom taxonomy mover');
+  module_load_include('class.inc', 'custom_tm');
+  $mover = new customTm();
+  $build = $mover->buildHtml();
+  return $build;
+}
+
+function custom_tm_filters_form($form, &$form_state, $filters = array()) {
+  $form['#prefix'] = '<div class="custom-tm-filters-form-wr">';
+  $form['#suffix'] = '</div>';
+  $form['#attributes']['class'][] = 'custom-tm-filters-form';
+  $form['#attributes']['class'][] = 'custom-tm-auto-submit';
+
+  foreach ($filters as $filter_key => $filter_element) {
+    $form[$filter_key] = $filter_element;
+    //$form[$filter_key]['#default_value'] = !empty($_GET[$filter_key]) ? $_GET[$filter_key] : '';
+  }
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Select'),
+    '#attributes' => array('class' => array('element-invisible'))
+  );
+  return $form;
+}
+
+function custom_tm_filters_form_submit($form, &$form_state) {
+  $values = $form_state['values'];
+  module_load_include('class.inc', 'custom_tm');
+  $path = current_path();
+  $mover = new customTm();
+  $query = $mover->getQuery($form_state['values']);
+  $_SESSION['custom_tm'] = $query;
+  $form_state['redirect'] = array($path, array('query' => $query));
+}
+
+function custom_tm_actions_form($form, &$form_state, $actions = array(), $content = array(), $filters = array()) {
+
+  $m_path = drupal_get_path('module', 'custom_tm');
+  drupal_add_js($m_path . '/custom_tm.js');
+  drupal_add_css($m_path . '/custom_tm.css');
+  $form = array(
+    '#prefix' => '<div class="custom-tm-actions-form-wr">',
+    '#suffix' => '</div>',
+  );
+  $form['#attributes']['class'][] = 'custom-tm-auto-submit';
+
+  foreach ($actions as $actions_key => $actions_element) {
+    $form[$actions_key] = $actions_element;
+  }
+
+  $form['update'] = array(
+    '#type' => 'submit',
+    '#value' => t('Update'),
+    '#attributes' => array(
+      'class' => array('element-invisible'),
+    )
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Fire!'),
+  );
+
+
+  $form['content'] = array(
+    '#prefix' => '<div class="custom-tm-page-content-wr clearfix"><table class="custom-tm-page-content">',
+    '#suffix' => '</table></div>'
+  );
+  $form['content']['header'] = array(
+    '#prefix' => '<thead><tr>',
+    '#suffix' => '</thead></tr>'
+  );
+
+  $header = array(
+    '_checkit' => t('Check it'),
+    'name' => t('Name'),
+    'v_name' => t('Voc name'),
+    'tid' => t('ID'),
+    'vid' => t('Voc ID'),
+    'description' => t('Description'),
+    'weight' => t('Weight'),
+    'v_weight' => t('Voc weight')
+  );
+
+  foreach ($header as $head_key => $head_cell) {
+    if ($head_key == '_checkit') {
+      $form['content']['header'][$head_key] = array(
+        '#prefix' => '<th class="custom-tm-page-content-term-' . $head_key . '">',
+        '#suffix' => '</th>',
+        '#type' => 'checkbox',
+        '#title' => t('Check all'),
+        '#attributes' => array('class' => array('custom-tm-term-check-all'))
+      );
+    }
+    else {
+      $form['content']['header'][$head_key] = array(
+        '#prefix' => '<th class="custom-tm-page-content-term-' . $head_key . '">',
+        '#suffix' => '</th>',
+        '#markup' => '<div class="custom-tm-header-cell-inner">' . $head_cell . '</div>',
+      );
+    }
+  }
+
+  $form['content']['body'] = array(
+    '#prefix' => '<body>',
+    '#suffix' => '</body>'
+  );
+  $odd = TRUE;
+
+  foreach ($content as $tid => $term_extends) {
+
+    $odd = !$odd;
+    $form['content']['body'][$tid] = array(
+      '#prefix' => '<tr class="' . ($odd ? 'custom-tm-odd' : 'custom-tm-even') . '">',
+      '#suffix' => '</tr>'
+    );
+
+    foreach ($header as $head_key => $head_cell) {
+
+      if ($head_key == '_checkit') {
+        $form['content']['body'][$tid][$head_key . '_tid_' . $tid] = array(
+          '#prefix' => '<td class="custom-tm-page-content-term-' . $head_key . '">',
+          '#suffix' => '</td>',
+          '#type' => 'checkbox',
+          '#title' => t('Check it'),
+          '#attributes' => array('class' => array('custom-tm-term-check-it'))
+        );
+
+        if (!empty($filters['vid']['#default_value'])) {
+          $parent = isset($filters['parent']['#default_value']) ? $filters['parent']['#default_value'] : 0;
+          if (!in_array($parent, $term_extends->parents)) {
+            $form['content']['body'][$tid][$head_key . '_tid_' . $tid]['#attributes']['disabled'] = TRUE;
+          }
+        }
+      }
+      else {
+        if (isset($term_extends->$head_key)) {
+          if ($head_key == 'name' && !empty($term_extends->depth)) {
+            $term_value = str_repeat("&nbsp;&nbsp;", $term_extends->depth) . $term_extends->$head_key;
+          }
+          else {
+            $term_value = $term_extends->$head_key;
+          }
+        }
+        else {
+          $term_value = "&nbsp;";
+        }
+
+        $form['content']['body'][$tid][$head_key] = array(
+          '#prefix' => '<td class="custom-tm-page-content-term-' . $head_key . '">',
+          '#suffix' => '</td>',
+          '#markup' => '<div class="custom-tm-cell-inner">' . $term_value . '</div>',
+        );
+      }
+    }
+  }
+
+  return $form;
+}
+
+function custom_tm_actions_form_submit($form, &$form_state) {
+  $values = array_filter($form_state['values']);
+
+  module_load_include('class.inc', 'custom_tm');
+  $path = current_path();
+  $mover = new customTm();
+  $query = $mover->getQuery($form_state['values']);
+  $_SESSION['custom_tm'] = $query;
+
+  if ($values['op'] == t('Fire!')) {
+
+//move it
+    if (!empty($values['move'])) {
+      $tids = array();
+      $vid = $values['move'];
+      $parent = !empty($values['move_parent']) ? $values['move_parent'] : 0;
+      foreach ($values as $val_key => $value) {
+        $tid = str_replace('_checkit_tid_', '', $val_key);
+        if (is_numeric($tid)) {
+          $tids[] = $tid;
+        }
+      }
+      if (!empty($tids)) {
+        custom_tm_batch_move(array($path, array('query' => $query)), $vid, $parent, $tids);
+      }
+      else {
+        drupal_set_message(t('Terms not checked.'));
+      }
+    }
+    else {
+      drupal_set_message(t('Vocabulary for move not selected.'));
+    }
+  }
+
+  $form_state['redirect'] = array($path, array('query' => $query));
+}
+
+function custom_tm_batch_move($back_page = '<front>', $vid = 0, $parent = 0, $tids = array()) {
+  batch_set(custom_tm_batch_move_process($vid, $parent, $tids));
+  batch_process($back_page);
+}
+
+function custom_tm_batch_move_process($vid = 0, $parent = 0, $tids = array()) {
+  $operations = array();
+
+
+  foreach ($tids as $key => $tid) {
+    $operations[] = array('custom_tm_batch_move_op', array($vid, $parent, $tid));
+  }
+
+  // Create an array which contains an array of the operations to
+  // perform and a method to call when the operations are all finished
+  $batch = array(
+    'operations' => $operations,
+    'finished' => 'custom_tm_batch_move_finished',
+  );
+  return $batch;
+}
+
+function custom_tm_batch_move_op($vid = 0, $parent = 0, $tid = 0, &$context) {
+  $children = taxonomy_get_children($tid);
+  $term = taxonomy_term_load($tid);
+  $term->custom_tm['vid'] = $term->vid;
+  $term->custom_tm['parents'] = taxonomy_get_parents($tid);
+  $term->custom_tm['parents'] = array_combine(array_keys($term->custom_tm['parents']), array_keys($term->custom_tm['parents']));
+  $term->vid = $vid;
+  $term->parent = array($parent => $parent);
+  taxonomy_term_save($term);
+
+  if (!empty($children)) {
+    foreach ($children as &$children_term) {
+      $children_term->custom_tm['vid'] = $children_term->vid;
+      $children_term->vid = $vid;
+      taxonomy_term_save($children_term);
+    }
+  }
+
+  $result = 'Term ID:' . $tid . ' processed.';
+
+  // Store some result for post-processing in the finished callback.
+  $context['results'][] = $result;
+
+  // Optional message displayed under the progressbar.
+  $context['message'] = t('Loading term ID:@tid', array('@tid' => $tid));
+}
+
+function custom_tm_batch_move_finished($success, $results, $operations) {
+  if ($success) {
+
+    // Here we could do something meaningful with the results.
+    // We just display the number of nodes we processed...
+    $message = count($results) . ' terms processed.';
+  }
+  else {
+
+    // An error occurred.
+    // $operations contains the operations that remained unprocessed.
+    $error_operation = reset($operations);
+    $message = 'An error occurred while processing ' . $error_operation[0] . ' with arguments :' . print_r($error_operation[0], TRUE);
+  }
+  drupal_set_message($message);
+  drupal_flush_all_caches();
+}

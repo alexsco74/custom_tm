@@ -1,0 +1,75 @@
+.custom-tm-check-all-progress, .custom-tm-check-all-progress:hover {
+    cursor: wait;
+    border: 1px solid black;
+}
+
+table.custom-tm-page-content {
+    width: 100%;
+}
+
+.custom-tm-page-content td {
+    padding: 0;
+}
+
+.custom-tm-page-content .custom-tm-odd td {
+    background: #eeeeee;
+    padding: 0;
+}
+
+.custom-tm-page-content .custom-tm-even td {
+    background: #fbfbfb;
+}
+
+.custom-tm-page-content td > div {
+    margin: 0;
+    padding: 3px;
+}
+
+.custom-tm-element-invisible {
+    display: none;
+}
+
+.custom-tm-page-content .form-item label {
+    background: #ccc;
+    display: inline-block;
+    width: 100%;
+    padding: 0;
+}
+
+.custom-tm-page-content-term-description .custom-tm-cell-inner {
+    max-height: 30px;
+    overflow: hidden;
+    max-width: 300px;
+}
+
+.custom-tm-page-content-wr {
+    padding-top: 1em;
+}
+
+.custom-tm-attention {
+    color: red;
+}
+
+.custom-tm-description-wr {
+    padding: 1em 0;
+}
+
+.custom-tm-page-content th label {
+    color: #fff;
+}
+
+.custom-tm-big-radios-checked-label {
+    color: green;
+}
+
+.custom-tm-big-radios-switch {
+    cursor: pointer;
+}
+
+.custom-tm-big-radios-switch {
+    border-bottom: 1px dotted blue;
+}
+.custom-tm-big-radios-icon{
+    padding:0 3px;
+    color:dodgerblue;
+}

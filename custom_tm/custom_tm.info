@@ -1,0 +1,5 @@
+name = Custom taxonomy mover
+description = Custom taxonomy mover
+package = Custom
+version = VERSION
+core = 7.x
